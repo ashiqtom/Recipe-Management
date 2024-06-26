@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recipe Management and Sharing Platform</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="auth-links">
+    <a href="../login/login.html">Login</a>
+    <a href="../register/register.html">Register</a>
+    <a href="../admins/admins.html">admin</a>
+  </div>
+  <div id="app">
+    <nav>
+      <ul>
+        <li><a href="#" id="navRecipes">Recipes</a></li>
+        <li><a href="#" id="navCreateRecipe">Create Recipe</a></li>
+        <li><a href="#" id="navProfile">Profile</a></li>
+        <li><a href="#" id="navFavorites">Favorites</a></li>
+      </ul>
+    </nav>
+
+    <div id="content">
+      <div id="recipesSection" class="page">
+        <h2>Recipes</h2>
+          <form id="searchForm">
+            <input type="text" id="searchInput" placeholder="Search recipes...">
+            <button type="submit">Search</button>
+          </form>    
+        <div id="recipes"></div>
+      </div>
+
+      <div id="createRecipeSection" class="page" style="display:none;">
+        <h2>Create Recipe</h2>
+        <form id="createRecipeForm" enctype="multipart/form-data">
+          <input type="text" id="recipeTitle" placeholder="Title" required>
+          <textarea id="recipeIngredients" placeholder="Ingredients" required></textarea>
+          <textarea id="recipeInstructions" placeholder="Instructions" required></textarea>
+          <input type="number" id="cookingTime" placeholder="Cooking Time (minutes)" required>
+          <input type="number" id="servings" placeholder="Servings" required>
+          <input type="file" id="recipeImage" accept="image/*">
+          <button type="submit">Create Recipe</button>
+        </form>
+      </div>
+
+      <div id="profileSection" class="page" style="display:none;">
+        <h2>Profile</h2>
+        <div id="userDetails"></div>
+        <div id="userRecipes"></div>
+      </div>
+
+      <div id="favoritesSection" class="page" style="display:none;">
+        <h2>Favorites</h2>
+        <div id="favorites"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const navRecipes = document.getElementById('navRecipes');
+      const navCreateRecipe = document.getElementById('navCreateRecipe');
+      const navProfile = document.getElementById('navProfile');
+      const navFavorites = document.getElementById('navFavorites');
+      const recipesSection = document.getElementById('recipesSection');
+      const createRecipeSection = document.getElementById('createRecipeSection');
+      const profileSection = document.getElementById('profileSection');
+      const favoritesSection = document.getElementById('favoritesSection');
+      const createRecipeForm = document.getElementById('createRecipeForm');
+      const recipesDiv = document.getElementById('recipes');
+      const userDetailsDiv = document.getElementById('userDetails');
+      const userRecipesDiv = document.getElementById('userRecipes');
+      const favoritesDiv = document.getElementById('favorites');
+
+      const showPage = (page) => {
+        recipesSection.style.display = 'none';
+        createRecipeSection.style.display = 'none';
+        profileSection.style.display = 'none';
+        favoritesSection.style.display = 'none';
+
+        if (page === 'recipes') {
+          recipesSection.style.display = 'block';
+          getRecipes();
+        } else if (page === 'createRecipe') {
+          createRecipeSection.style.display = 'block';
+        } else if (page === 'profile') {
+          profileSection.style.display = 'block';
+          getUserProfile();
+        } else if (page === 'favorites') {
+          favoritesSection.style.display = 'block';
+          getFavorites();
+        }
+      };
+
+      navRecipes.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage('recipes');
+      });
+
+      navCreateRecipe.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage('createRecipe');
+      });
+
+      navProfile.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage('profile');
+      });
+
+      navFavorites.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage('favorites');
+      });
+
+      // Function to fetch recipes and display them
+      const getRecipes = async () => {
+        try {
+          const response = await axios.get('/recipes');
+          const recipes = response.data;
+          recipesDiv.innerHTML = '';
+          recipes.forEach(recipe => displayRecipe(recipe));
+        } catch (err) {
+          console.error('Error getting recipes:', err.response.data);
+        }
+      };
+
+        // Function to display a single recipe
+      const displayRecipe = (recipe) => {
+        const recipeDiv = document.createElement('div');
+        recipeDiv.classList.add('recipe');
+        recipeDiv.innerHTML = `
+          <h3>${recipe.title}</h3>
+          <p><strong>Ingredients:</strong> ${recipe.ingredients}</p>
+          <p><strong>Instructions:</strong> ${recipe.instructions}</p>
+          <p><strong>Cooking Time:</strong> ${recipe.cookingTime} minutes</p>
+          <p><strong>Servings:</strong> ${recipe.servings}</p>
+          ${recipe.imageUrl ? `<img src="/${recipe.imageUrl}" alt="${recipe.title}" width="100">` : ''}
+          <button onclick="window.likeRecipe(${recipe.id})">Like</button>
+          <button onclick="window.showComments(${recipe.id})">Comments</button>
+          <div id="comments_${recipe.id}" style="display:none;">
+            <textarea id="commentText_${recipe.id}" placeholder="Add a comment"></textarea>
+            <button onclick="window.addComment(${recipe.id})">Add Comment</button>
+            <div id="commentsList_${recipe.id}"></div>
+          </div>
+        `;
+        recipesDiv.appendChild(recipeDiv);
+
+        // Fetch and display comments for each recipe
+        fetchComments(recipe.id);
+      };
+
+       // Search form and functionality
+      const searchForm = document.getElementById('searchForm');
+      const searchInput = document.getElementById('searchInput');
+
+      searchForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const searchTerm = searchInput.value.trim();
+        if (searchTerm === '') {
+          alert('Please enter a search term');
+          return;
+        }
+
+        try {
+          const response = await axios.get(`/recipes/search?term=${encodeURIComponent(searchTerm)}`);
+          console.log(response)
+          const searchResults = response.data;
+          recipesDiv.innerHTML = '';
+          searchResults.forEach(recipe => displayRecipe(recipe));
+        } catch (err) {
+          console.error('Error searching recipes:', err.response ? err.response.data : err);
+          alert('Error searching recipes');
+        }
+      });
+      
+      createRecipeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const title = document.getElementById('recipeTitle').value;
+        const ingredients = document.getElementById('recipeIngredients').value;
+        const instructions = document.getElementById('recipeInstructions').value;
+        const cookingTime = document.getElementById('cookingTime').value;
+        const servings = document.getElementById('servings').value;
+        const image = document.getElementById('recipeImage').files[0];
+
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('ingredients', ingredients);
+        formData.append('instructions', instructions);
+        formData.append('cookingTime', cookingTime);
+        formData.append('servings', servings);
+        if (image) {
+          formData.append('image', image);
+        }
+
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.post('/recipes', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': token
+            }
+          });
+          alert('Recipe created successfully');
+          showPage('recipes');
+        } catch (err) {
+          console.error('Error creating recipe:', err.response ? err.response.data : err);
+          alert('Error creating recipe');
+        }
+      });
+      
+      
+
+      // Function to fetch comments for a specific recipe
+      const fetchComments = async (recipeId) => {
+        try {
+          const response = await axios.get(`/recipes/comments/${recipeId}`);
+          const comments = response.data;
+          const commentsListDiv = document.getElementById(`commentsList_${recipeId}`);
+          commentsListDiv.innerHTML = '';
+          comments.forEach(comment => {
+            const commentDiv = document.createElement('div');
+            commentDiv.classList.add('comment');
+            commentDiv.innerHTML = `
+              <p><strong>${comment.User.username}:</strong> ${comment.text}</p>
+            `;
+            commentsListDiv.appendChild(commentDiv);
+          });
+        } catch (err) {
+          console.error(`Error fetching comments for recipe ${recipeId}:`, err);
+        }
+      };
+
+
+      window.addComment = async (recipeId) => {
+        const commentText = document.getElementById(`commentText_${recipeId}`).value;
+        if (!commentText) {
+          alert('Comment cannot be empty');
+          return;
+        }
+
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.post(`/recipes/comments/${recipeId}`, { text: commentText }, {
+            headers: {
+              'Authorization': token
+            }
+          });
+          alert('Comment added successfully');
+          document.getElementById(`commentText_${recipeId}`).value = '';
+          fetchComments(recipeId);
+
+        } catch (err) {
+          console.error('Error adding comment:', err.response.data);
+          alert('Error adding comment');
+        }
+      };
+      // Function to toggle the display of comments
+      window.showComments = (recipeId) => {
+        const commentsDiv = document.getElementById(`comments_${recipeId}`);
+        commentsDiv.style.display = commentsDiv.style.display === 'none' ? 'block' : 'none';
+      };
+
+      const getUserProfile = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get('/user/profile', {
+            headers: {
+              'Authorization': token
+            }
+          });
+          const user = response.data.user;
+          const userRecipes = response.data.recipes;
+
+          userDetailsDiv.innerHTML = `
+            <p><strong>Name:</strong> ${user.name}</p>
+            <p><strong>Email:</strong> ${user.email}</p>
+          `;
+
+          userRecipesDiv.innerHTML = '';
+          userRecipes.forEach(recipe => {
+            const recipeDiv = document.createElement('div');
+            recipeDiv.classList.add('recipe');
+            recipeDiv.innerHTML = `
+              <h3>${recipe.title}</h3>
+              <p><strong>Ingredients:</strong> ${recipe.ingredients}</p>
+              <p><strong>Instructions:</strong> ${recipe.instructions}</p>
+              <p><strong>Cooking Time:</strong> ${recipe.cookingTime} minutes</p>
+              <p><strong>Servings:</strong> ${recipe.servings}</p>
+              ${recipe.imageUrl ? `<img src="/${recipe.imageUrl}" alt="${recipe.title}" width="100">` : ''}
+              <button onclick="window.editRecipeInline(${recipe.id})">Edit</button>
+              <button onclick="window.deleteRecipe(${recipe.id})">Delete</button>
+            `;
+            userRecipesDiv.appendChild(recipeDiv);
+          });
+
+        } catch (err) {
+          console.error('Error getting profile:', err);
+        }
+      };
+
+      const getFavorites = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get('/recipes/liked', {
+            headers: {
+              'Authorization': token
+            }
+          });
+          const favorites = response.data;
+          favoritesDiv.innerHTML = '';
+          favorites.forEach(recipe => {
+            const recipeDiv = document.createElement('div');
+            recipeDiv.classList.add('recipe');
+            recipeDiv.innerHTML = `
+              <h3>${recipe.title}</h3>
+              <p><strong>Ingredients:</strong> ${recipe.ingredients}</p>
+              <p><strong>Instructions:</strong> ${recipe.instructions}</p>
+              <p><strong>Cooking Time:</strong> ${recipe.cookingTime} minutes</p>
+              <p><strong>Servings:</strong> ${recipe.servings}</p>
+              ${recipe.imageUrl ? `<img src="/${recipe.imageUrl}" alt="${recipe.title}" width="100">` : ''}
+            `;
+            favoritesDiv.appendChild(recipeDiv);
+          });
+        } catch (err) {
+          console.error('Error getting favorites:', err);
+        }
+      };
+
+      window.editRecipeInline = async (recipeId) => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get(`/recipes/${recipeId}`, {
+            headers: {
+              'Authorization': token
+            }
+          });
+          console.log(response)
+          const recipe = response.data;
+
+          // Create an edit form in place of the recipe details
+          let recipeDiv = document.getElementById(`recipe_${recipeId}`);
+          if (!recipeDiv) {
+            recipeDiv = document.createElement('div');
+            recipeDiv.id = `recipe_${recipeId}`;
+            recipeDiv.classList.add('recipe');
+            userRecipesDiv.appendChild(recipeDiv);
+          }
+          recipeDiv.innerHTML = `
+            <form id="editForm_${recipeId}" onsubmit="submitEdit(${recipeId}); return false;">
+              <input type="text" id="editTitle_${recipeId}" value="${recipe.title}" required>
+              <textarea id="editIngredients_${recipeId}" required>${recipe.ingredients}</textarea>
+              <textarea id="editInstructions_${recipeId}" required>${recipe.instructions}</textarea>
+              <input type="number" id="editCookingTime_${recipeId}" value="${recipe.cookingTime}" required>
+              <input type="number" id="editServings_${recipeId}" value="${recipe.servings}" required>
+              <button type="submit">Save</button>
+            </form>
+          `;
+        } catch (err) {
+          console.error(`Error fetching recipe ${recipeId} for editing:`, err);
+          alert('Error fetching recipe for editing');
+        }
+      };
+
+      window.submitEdit = async (recipeId) => {
+        const editTitle = document.getElementById(`editTitle_${recipeId}`).value;
+        const editIngredients = document.getElementById(`editIngredients_${recipeId}`).value;
+        const editInstructions = document.getElementById(`editInstructions_${recipeId}`).value;
+        const editCookingTime = document.getElementById(`editCookingTime_${recipeId}`).value;
+        const editServings = document.getElementById(`editServings_${recipeId}`).value;
+
+        const formData = new FormData();
+        formData.append('title', editTitle);
+        formData.append('ingredients', editIngredients);
+        formData.append('instructions', editInstructions);
+        formData.append('cookingTime', editCookingTime);
+        formData.append('servings', editServings);
+
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.put(`/recipes/${recipeId}`, formData, {
+            headers: {
+              'Authorization': token,
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+          console.log(response);
+          alert('Recipe updated successfully');
+          getUserProfile(); // Refresh profile to reflect updated recipe
+        } catch (err) {
+          console.error('Error updating recipe:', err.response.data);
+          alert('Error updating recipe');
+        }
+      };
+
+      window.deleteRecipe = async (recipeId) => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.delete(`/recipes/${recipeId}`, {
+            headers: {
+              'Authorization': token
+            }
+          });
+          console.log(response);
+          alert('Recipe deleted successfully');
+          getUserProfile(); // Refresh profile to reflect deleted recipe
+        } catch (err) {
+          console.error('Error deleting recipe:', err.response.data);
+          alert('Error deleting recipe');
+        }
+      };
+
+      window.likeRecipe = async (recipeId) => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.post(`/recipes/like/${recipeId}`, {}, {
+            headers: {
+              'Authorization': token
+            }
+          });
+          alert('Recipe liked successfully');
+        } catch (err) {
+          console.error('Error liking recipe:', err.response.data);
+          alert('Error liking recipe');
+        }
+      };
+    });
+  </script>
+</body>
+</html>
